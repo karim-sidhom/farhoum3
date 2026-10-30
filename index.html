@@ -1297,15 +1297,19 @@ function camPhrase(preds, w){
 function camSay(text){
   if(!text) return;
   const lang = L==="ar" ? "ar" : "fr";
-  const fallback = ()=>{ camAudioBusy=false; try{ const u=new SpeechSynthesisUtterance(text); u.lang = lang==="ar"?"ar-SA":"fr-FR"; speechSynthesis.speak(u); }catch(e){} };
+  let done=false, wd=null;
+  const fin=()=>{ done=true; clearTimeout(wd); camAudioBusy=false; };
+  const fallback=()=>{ if(done) return; fin(); try{ const u=new SpeechSynthesisUtterance(text); u.lang = lang==="ar"?"ar-SA":"fr-FR"; speechSynthesis.speak(u); }catch(e){} };
   try{
     if(!camAudio){ camAudio=new Audio(); camAudio.preload="auto"; }
     camAudioBusy=true;
-    camAudio.onended=()=>{ camAudioBusy=false; };
+    camAudio.onplaying=()=>{ clearTimeout(wd); wd=setTimeout(fin,15000); };
+    camAudio.onended=fin;
     camAudio.onerror=fallback;
+    wd=setTimeout(fallback,3000);              // pas de lecture en 3 s -> voix du navigateur (sans couper l'autre)
     camAudio.src="https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl="+lang+"&q="+encodeURIComponent(text);
-    const p=camAudio.play();
-    if(p && p.catch) p.catch(fallback);
+    const pr=camAudio.play();
+    if(pr && pr.catch) pr.catch(fallback);
   }catch(e){ fallback(); }
 }
 async function camLoop(tok){

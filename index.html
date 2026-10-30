@@ -1299,17 +1299,24 @@ function camSay(text){
   const lang = L==="ar" ? "ar" : "fr";
   let done=false, wd=null;
   const fin=()=>{ done=true; clearTimeout(wd); camAudioBusy=false; };
-  const fallback=()=>{ if(done) return; fin(); try{ const u=new SpeechSynthesisUtterance(text); u.lang = lang==="ar"?"ar-SA":"fr-FR"; speechSynthesis.speak(u); }catch(e){} };
+  const fallback=(retry)=>{ if(done && retry!==true) return; fin(); try{
+    const u=new SpeechSynthesisUtterance(text); u.lang = lang==="ar"?"ar-SA":"fr-FR";
+    const vs=speechSynthesis.getVoices().filter(v=>v.lang.replace("_","-").startsWith(lang));
+    if(vs.length>1) u.voice=vs[vs.length-1];          // autre voix que celle de Farhoum (la 1re de la langue)
+    u.pitch=1.5; u.rate=1.1;                            // timbre différent de Farhoum
+    if(retry!==true) u.onerror=(ev)=>{ if(camOn && ev && /cancel|interrupt/.test(ev.error||"")) setTimeout(()=>fallback(true),1500); };
+    speechSynthesis.speak(u);
+  }catch(e){} };
   try{
     if(!camAudio){ camAudio=new Audio(); camAudio.preload="auto"; }
     camAudioBusy=true;
     camAudio.onplaying=()=>{ clearTimeout(wd); wd=setTimeout(fin,15000); };
     camAudio.onended=fin;
-    camAudio.onerror=fallback;
+    camAudio.onerror=()=>fallback();
     wd=setTimeout(fallback,3000);              // pas de lecture en 3 s -> voix du navigateur (sans couper l'autre)
     camAudio.src="https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl="+lang+"&q="+encodeURIComponent(text);
     const pr=camAudio.play();
-    if(pr && pr.catch) pr.catch(fallback);
+    if(pr && pr.catch) pr.catch(()=>fallback());
   }catch(e){ fallback(); }
 }
 async function camLoop(tok){

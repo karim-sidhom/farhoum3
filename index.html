@@ -260,10 +260,29 @@ window.makeGpsFilter=function(o){
   /* ---------- position ---------- */
   function ptDist(a,b,c,d){ var k=111320, x=(d-b)*k*Math.cos(a*Math.PI/180), y=(c-a)*k; return Math.sqrt(x*x+y*y); }
   var gf=window.makeGpsFilter({maxAcc:40,q:2.5}), rawAcc=99, rawT=0, accBad=false, faultSince=0, want='none', wantSince=0, lastVib=0, ka=null, wl=null, lastTick=0, lastWarnB=0;
+  /* ---------- 📍 position GPS : point bleu + cercle centré sur la position (rayon = précision du GPS) ---------- */
+  var mePane=map.createPane('mePane'); mePane.style.zIndex=480; mePane.style.pointerEvents='none';
+  var meDot=null, meCircle=null;
+  function showMe(){
+    if(!me) return; var ll=[me.lat,me.lon], r=Math.max(3,me.acc||10);
+    if(!meCircle){
+      meCircle=L.circle(ll,{radius:r,color:'#1e90ff',weight:2,fillColor:'#1e90ff',fillOpacity:.18,pane:'mePane',interactive:false}).addTo(map);
+      meDot=L.circleMarker(ll,{radius:8,color:'#fff',weight:3,fillColor:'#1e90ff',fillOpacity:1,pane:'mePane',interactive:false}).addTo(map);
+    } else { meCircle.setLatLng(ll); meCircle.setRadius(r); meDot.setLatLng(ll); }
+  }
+  function startWatch(){
+    if(watchId!=null) return;
+    if(!navigator.geolocation){ say('⚠️ Géolocalisation non supportée',4000); return; }
+    watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:500,timeout:15000});
+  }
+  var lb=document.createElement('button'); lb.id='safeLoc'; lb.type='button'; lb.textContent='📍'; lb.title='Ma position GPS'; lb.setAttribute('aria-label','Centrer la carte sur ma position GPS');
+  btn.parentNode.insertBefore(lb,db.nextSibling);
+  lb.onclick=function(){ startWatch(); if(me){ map.setView([me.lat,me.lon],Math.max(map.getZoom(),18)); speak('Position centrée'); } else say('📍 Recherche de votre position…',3000); };
   function onPos(p){
     rawAcc=p.coords.accuracy||99; rawT=Date.now();
     var f=gf(p); if(!f) return;                              /* fix imprécis ou saut non confirmé : on ignore */
     me={lat:f.lat,lon:f.lon,acc:rawAcc,t:Date.now()};
+    showMe();
     if(!first){ first=true; map.setView([me.lat,me.lon],Math.max(map.getZoom(),18)); }
     loadUser(); evalPos();
   }
@@ -348,7 +367,7 @@ window.makeGpsFilter=function(o){
       wakeOn();
       if(!navigator.geolocation){ say('⚠️ Géolocalisation non supportée',4000); return; }
       onSince=Date.now(); readySaid=false; errSaid=0;
-      if(watchId==null) watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:500,timeout:15000});
+      startWatch();
       say('🦯 Alerte activée — 🟢 bip lent : hors chaussée — 🔴 bip rapide : chaussée',5000); speak('Alerte trottoir activée');
       clearTimeout(timer); tick(); if(me){ map.setView([me.lat,me.lon],Math.max(map.getZoom(),18)); loadUser(); }
     } else {
